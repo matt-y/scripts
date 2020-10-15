@@ -23,7 +23,7 @@ variety.
 
 Scripts related to backup creation, and backup execution.
 
-- [local-rsync.sh](./backup/local-rsync) &dash; Script that executes an rsync
+- [local-rsync.sh](./backup/local-rsync.sh) &dash; Script that executes an rsync
   with a local source to a local mountable target. I use this in combination
   with the [add-to-fstab.sh](./drives/add-to-fstab.sh) script to create a local
   backup of my home directory to an external drive that I use for simple
