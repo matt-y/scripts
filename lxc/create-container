@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# Script to assist in creating an lxc container
+#
+# The only required argument is the name of the container that is being
+# created. Delegates ALL OTHER ARGUMENTS to the `lxc launch` command.
+#
+# Creates a clean snapshot after launching the new container, which is
+# created with the required name parameter in the form: "$NAME--clean"
+
+# Usage: create-container <container-name> [lxc init argumets and flags]
+
+set -euo pipefail
+
+NAME=$1
+
+# Slice all arguments except the first into the lxc init command
+lxc init "${@:2}" "$NAME"
+
+lxc snapshot "$NAME" "$NAME--clean"

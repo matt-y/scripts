@@ -28,3 +28,14 @@ Scripts related to backup creation, and backup execution.
   with the [add-to-fstab.sh](./drives/add-to-fstab.sh) script to create a local
   backup of my home directory to an external drive that I use for simple
   backups.
+
+### [LXC Helper Scripts](./lxc-helper-scripts)
+
+Utility scripts to aid in managing lxc profiles and containers.
+
+- [create-profile](./lxc-helper-scripts/create-container) &dash; Copies
+  the `default` profile and then sets the `user.user-data` within that
+  profile to the contents of a cloud-init yaml configuration file.
+- [create-container](./lxc-helper-scripts/create-container) &dash;
+  Delegates the container creation to the `lxc init` command; also
+  creates a clean snapshot of the new container.
