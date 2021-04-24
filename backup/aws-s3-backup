@@ -1,0 +1,167 @@
+#!/bin/bash
+
+# Script to back up a local directory (IE: the home directory) to a
+# remote s3 bucket first by tar-ing the local directory, then using the
+# `aws s3 cp` command.
+
+# Optionally takes a file of "exclusions" - one per line - that will be
+# used by the tar command to exclude various things one does not wish to
+# include in a backup
+
+# The script is intented only to be a small convenience around the
+# simplest usage of the aws s3 cp cli. 
+
+set -Eeuox pipefail
+
+readonly RED='\033[0;31m'
+readonly NOFORMAT='\033[0m'
+
+usage() {
+    cat <<EOL
+aws-s3-backup [--excludes FILE] [--dryrun] aws-profile s3-bucket-name backup-source
+
+Tar the provided backup-source dir, and copy it to the s3-bucket-name,
+using the profile provided by aws-profile. This creates a tar file
+object in the bucket named after the current datetime, prefixed with the
+hostname of the machine running the script.
+
+Optionally, some things can be excluded from the tar file through the
+--excludes argument. This argument takes a file with one pattern per
+line of things to be excluded. They will be passed to tar as multiple
+--exclude arguments. For valid patterns, consult the tar man page
+
+The tar file is temporarily stored in /tmp/$(hostname), and will be
+removed when the script no longer needs it.
+
+EOL
+    return
+}
+
+die() {
+    local MSG=$1
+    
+    echo -e "$RED$MSG$NOFORMAT"
+    exit 1
+}
+
+if ! command -v aws &> /dev/null; then
+    die "aws cli not found; please install"
+fi
+
+DRY_RUN=""
+EXCLUDE_FILE=""
+POSITIONALS=()
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+	--help)
+	    usage
+	    exit 0
+	    ;;
+	--excludes)
+	    EXCLUDE_FILE="$2"
+	    shift; shift;
+	    ;;
+	--dryrun) DRY_RUN="YESTHANKYOU"
+		  shift;
+		  ;;
+	*) POSITIONALS+=("$1")
+	   shift
+	   ;;
+    esac
+done
+
+set -- "${POSITIONALS[@]}"
+
+[[ ! $# -eq 3 ]] && die "Invalid number of positional arguments. Get smart, and run --help"
+
+readonly DATETIME="$(date '+%Y-%m-%d_%H:%M:%S')"
+readonly HOSTNAME="$(hostname)"
+readonly AWS_PROFILE=$1
+readonly AWS_S3_BUCKET_NAME=$2
+readonly BACKUP_SOURCE=$3
+
+readonly OBJECT_PREFIX=$HOSTNAME
+readonly BACKUP_NAME="${DATETIME}-backup"
+readonly NEW_OBJECT_DESTINATION="s3://${AWS_S3_BUCKET_NAME}/${OBJECT_PREFIX}"
+
+[[ ! -d "$BACKUP_SOURCE" ]] && die "Backup source not a directory: ${BACKUP_SOURCE}"
+[[ ! -d /tmp ]] && die "/tmp not a directory, temporary tar files are stored there by this script"
+
+EXCLUDES=()
+if [ -n "$EXCLUDE_FILE"  ]; then
+    if [ -f "$EXCLUDE_FILE" ]; then
+	while read -r line
+	do
+	      EXCLUDES+=("--exclude=""$line")
+	done < "$EXCLUDE_FILE"
+   else
+       die "Exclude file not found: $EXCLUDE_FILE"
+   fi
+fi
+
+readonly TAR_BACKUP_DIR="/tmp/$OBJECT_PREFIX"
+readonly TAR_BACKUP_FILE="${TAR_BACKUP_DIR}/${BACKUP_NAME}.tar"
+
+echo "Creating location for transient tar files at ${TAR_BACKUP_DIR}" 
+mkdir -p "$TAR_BACKUP_DIR"
+
+cleanup_tar() {
+    echo "Removing ${TAR_BACKUP_FILE}"
+    rm "${TAR_BACKUP_FILE}"
+}
+
+handle_signals() {
+    local TAR_PID="$1"
+    echo "Received signal, stopping and cleaning."
+
+    kill -9 "$TAR_PID"
+    cleanup_tar
+    exit 1
+}
+
+
+if [ -n "$DRY_RUN" ]; then
+    echo "dry run, touching tar and directing output to /dev/null"
+    touch "${TAR_BACKUP_FILE}"
+    tar \
+	"${EXCLUDES[@]}" \
+	-zcvpf /dev/null \
+	"$BACKUP_SOURCE" &
+else    
+    tar \
+	"${EXCLUDES[@]}" \
+	-zcvpf "${TAR_BACKUP_FILE}" \
+	"$BACKUP_SOURCE" &
+fi
+
+readonly tar_pid=$!
+
+trap 'handle_signals "$tar_pid"' SIGINT SIGTERM
+
+if ! wait; then
+    echo "Problem encountered waiting for tar; stopping and cleaning"
+    cleanup_tar
+    die "An error occurred trying to wait for the bg tar process, s3 upload not attempted"
+fi
+
+trap - SIGINT SIGTERM
+
+echo "Tar completed; tar file barfed to ${TAR_BACKUP_FILE}"
+echo "Copying ${TAR_BACKUP_FILE} to ${NEW_OBJECT_DESTINATION}"
+
+if aws --profile "${AWS_PROFILE}" s3 \
+    cp \
+    "${TAR_BACKUP_FILE}"  \
+    "${NEW_OBJECT_DESTINATION}" \
+    ${DRY_RUN:+"--dryrun"};
+then
+    echo "${TAR_BACKUP_FILE} copied to s3 successfully"
+    cleanup_tar
+    echo "Tar available in s3 at: ${NEW_OBJECT_DESTINATION}"
+else
+    echo "Problem encountered uploading to s3; stopping and cleaning"
+    cleanup_tar
+    die "Failed to copy ${TAR_BACKUP_FILE} to s3"
+fi
+

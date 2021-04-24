@@ -28,3 +28,7 @@ Scripts related to backup creation, and backup execution.
   with the [add-to-fstab.sh](./drives/add-to-fstab.sh) script to create a local
   backup of my home directory to an external drive that I use for simple
   backups.
+- [aws-s3-backup](./backup/aws-s3-backup) &dash; Bash script that
+  creates a tar file of a given source directory, and copies that file
+  to an s3 bucket. Can exclude things from the tar file by providing a
+  file of tar compatible --exclude patterns, one per line.
