@@ -32,3 +32,14 @@ Scripts related to backup creation, and backup execution.
   creates a tar file of a given source directory, and copies that file
   to an s3 bucket. Can exclude things from the tar file by providing a
   file of tar compatible --exclude patterns, one per line.
+
+### [LXC Helper Scripts](./lxc)
+
+Utility scripts to aid in managing lxc profiles and containers.
+
+- [create-profile](./lxc/create-container) &dash; Copies
+  the `default` profile and then sets the `user.user-data` within that
+  profile to the contents of a cloud-init yaml configuration file.
+- [create-container](./lxc/create-container) &dash;
+  Delegates the container creation to the `lxc init` command; also
+  creates a clean snapshot of the new container.

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+set -euo pipefail
+
+# Script that will create a profile with a given cloud-init
+# configuration file
+
+# Usage: create-profile <profile-name> <cloud-init-config-file>
+
+NAME=$1
+
+CLOUD_INIT_FILE=$2
+
+# Copy the default profile
+lxc profile copy default "$NAME"
+
+# Set the new profile's user-data to the contents of the provided yaml
+# file
+lxc profile set "$NAME" user.user-data - < "$CLOUD_INIT_FILE"
