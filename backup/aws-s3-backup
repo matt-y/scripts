@@ -11,7 +11,7 @@
 # The script is intented only to be a small convenience around the
 # simplest usage of the aws s3 cp cli. 
 
-set -Eeuox pipefail
+set -Eeuo pipefail
 
 readonly RED='\033[0;31m'
 readonly NOFORMAT='\033[0m'
